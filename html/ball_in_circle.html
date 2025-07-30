@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ball Bounce Simulation</title>
+  <style>
+    body, html { margin: 0; padding: 0; overflow: hidden; background: #000; }
+    canvas { display: block; }
+    #controls {
+      position: absolute;
+      top: 15px;
+      left: 15px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 15px;
+      border-radius: 10px;
+      font-family: Arial, sans-serif;
+      color: #fff;
+      z-index: 10;
+    }
+    #controls label { display: flex; align-items: center; margin-bottom: 10px; }
+    #controls label span { width: 80px; }
+    #controls input[type="range"] { flex: 1; margin: 0 10px; }
+    #controls .value { width: 40px; text-align: right; }
+    #controls button { margin-right: 10px; padding: 6px 12px; border: none; border-radius: 5px; background: #fff; color: #000; cursor: pointer; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <label><span>Elasticity</span><input type="range" id="restSlider" min="0" max="1" step="0.01" value="1"><span class="value" id="restVal">1.00</span></label>
+    <label><span>Start X</span><input type="range" id="startXSlider" min="0" max="0" step="1" value="0"><span class="value" id="startXVal">0</span></label>
+    <label><span>Start Y</span><input type="range" id="startYSlider" min="0" max="0" step="1" value="0"><span class="value" id="startYVal">0</span></label>
+    <button id="resetBtn">Reset</button>
+    <button id="pauseBtn">Pause</button>
+  </div>
+  <canvas id="canvas"></canvas>
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    let paused = false;
+
+    const gravity = 0.5;
+    let containerRadius, cx, cy;
+    const initialRadius = 20;
+    let ballHue = 0;
+
+    const config = {
+      elasticity: parseFloat(document.getElementById('restSlider').value),
+      startX: 0,
+      startY: 0
+    };
+
+    let ball, history = [];
+
+    function playBeep(vx, vy) {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      gain.gain.value = 0.7;
+      osc.type = 'sine';
+      // Musical note based on direction of velocity
+      const angle = Math.atan2(vy, vx);
+      const freq = 440 * Math.pow(2, angle / (2 * Math.PI));
+      osc.frequency.value = freq;
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.1);
+    }
+
+    function initDimensions() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      cx = canvas.width / 2;
+      cy = canvas.height / 2;
+      containerRadius = Math.min(canvas.width, canvas.height) / 3;
+      const xSlider = document.getElementById('startXSlider');
+      const ySlider = document.getElementById('startYSlider');
+      xSlider.min = cx - (containerRadius - initialRadius);
+      xSlider.max = cx + (containerRadius - initialRadius);
+      ySlider.min = cy - (containerRadius - initialRadius);
+      ySlider.max = cy + (containerRadius - initialRadius);
+      xSlider.value = cx;
+      ySlider.value = cy - containerRadius + initialRadius;
+      document.getElementById('startXVal').textContent = xSlider.value;
+      document.getElementById('startYVal').textContent = ySlider.value;
+      config.startX = parseFloat(xSlider.value);
+      config.startY = parseFloat(ySlider.value);
+    }
+
+    function initBall() {
+      ball = {
+        x: config.startX,
+        y: config.startY,
+        // give an initial horizontal velocity for varied motion
+        vx: 3,
+        vy: 0,
+        radius: initialRadius
+      };
+      history = [];
+      ballHue = 0;
+      paused = false;
+      document.getElementById('pauseBtn').textContent = 'Pause';
+    }
+
+    function clampStart() {
+      const dx = config.startX - cx;
+      const dy = config.startY - cy;
+      const dist = Math.hypot(dx, dy);
+      if (dist > containerRadius - ball.radius) {
+        const angle = Math.atan2(dy, dx);
+        config.startX = cx + (containerRadius - ball.radius) * Math.cos(angle);
+        config.startY = cy + (containerRadius - ball.radius) * Math.sin(angle);
+      }
+    }
+
+    function update() {
+      if (paused) return;
+      ballHue = (ballHue + 1) % 360;
+      ball.vy += gravity;
+      ball.x += ball.vx;
+      ball.y += ball.vy;
+
+      const dx = ball.x - cx;
+      const dy = ball.y - cy;
+      const dist = Math.hypot(dx, dy);
+      if (dist + ball.radius > containerRadius) {
+        const nx = dx / dist;
+        const ny = dy / dist;
+        const dot = ball.vx * nx + ball.vy * ny;
+        ball.vx -= (1 + config.elasticity) * dot * nx;
+        ball.vy -= (1 + config.elasticity) * dot * ny;
+        // immediate growth and reposition to stay flush with boundary
+        ball.radius = Math.min(ball.radius * 1.05, containerRadius);
+        ball.x = cx + nx * (containerRadius - ball.radius);
+        ball.y = cy + ny * (containerRadius - ball.radius);
+        playBeep(ball.vx, ball.vy);
+        if (ball.radius >= containerRadius) {
+          paused = true;
+          document.getElementById('pauseBtn').textContent = 'Play';
+        }
+      }
+
+      history.push({ x: ball.x, y: ball.y, hue: ballHue, r: ball.radius });
+      if (history.length > 200) history.shift();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.beginPath();
+      ctx.arc(cx, cy, containerRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 4;
+      ctx.stroke();
+
+      history.forEach((p, i) => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${p.hue},100%,50%,${((i + 1) / history.length) * 0.5})`;
+        ctx.fill();
+      });
+
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+      ctx.fillStyle = `hsl(${ballHue},100%,50%)`;
+      ctx.fill();
+    }
+
+    function animate() {
+      update();
+      draw();
+      requestAnimationFrame(animate);
+    }
+
+    window.addEventListener('resize', () => { initDimensions(); initBall(); });
+    document.getElementById('restSlider').addEventListener('input', (e) => {
+      config.elasticity = parseFloat(e.target.value);
+      document.getElementById('restVal').textContent = parseFloat(e.target.value).toFixed(2);
+    });
+    document.getElementById('startXSlider').addEventListener('input', (e) => {
+      config.startX = parseFloat(e.target.value);
+      document.getElementById('startXVal').textContent = parseFloat(e.target.value).toFixed(0);
+    });
+    document.getElementById('startYSlider').addEventListener('input', (e) => {
+      config.startY = parseFloat(e.target.value);
+      document.getElementById('startYVal').textContent = parseFloat(e.target.value).toFixed(0);
+    });
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      clampStart();
+      initBall();
+    });
+    document.getElementById('pauseBtn').addEventListener('click', () => {
+      paused = !paused;
+      document.getElementById('pauseBtn').textContent = paused ? 'Play' : 'Pause';
+    });
+
+    window.onload = () => { initDimensions(); initBall(); animate(); };
+  </script>
+</body>
+</html>
