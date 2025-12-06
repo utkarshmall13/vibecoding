@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Fun Word Safari</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Playful Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700&family=Fredoka:wght@400;500;600&display=swap"
+    rel="stylesheet"
+  >
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Background clouds & animals -->
+  <div class="bg-decor">
+    <span class="cloud cloud-1">☁️</span>
+    <span class="cloud cloud-2">☁️</span>
+    <span class="cloud cloud-3">☁️</span>
+
+    <span class="animal animal-1">🦊</span>
+    <span class="animal animal-2">🐵</span>
+    <span class="animal animal-3">🐱</span>
+    <span class="animal animal-4">🐢</span>
+  </div>
+
+  <div class="app">
+    <header class="header">
+      <div class="title-area">
+        <h1>
+          🌈 Fun Word Safari 🐾
+        </h1>
+        <p class="subtitle">
+          Build a magic word grid from any theme you like!
+        </p>
+      </div>
+
+      <div class="controls">
+        <label class="theme-label">
+          🧠 Theme:
+          <input
+            id="theme-input"
+            type="text"
+            placeholder="animals, space, fruits, sports..."
+          />
+        </label>
+        <button id="generate-btn">✨ New Puzzle</button>
+      </div>
+
+      <div id="status" class="status"></div>
+    </header>
+
+    <main class="main">
+      <section class="grid-section">
+        <div class="grid-frame">
+          <div class="grid-title">
+            🔍 Find the hidden words!
+          </div>
+          <div id="grid" class="grid" aria-label="Word search grid"></div>
+        </div>
+      </section>
+
+      <aside class="sidebar">
+        <div class="counter-pill">
+          ✅ Words found:
+          <span id="found-count">0</span> /
+          <span id="total-count">0</span>
+        </div>
+
+        <h2 class="words-title">📜 Treasure List</h2>
+        <ul id="words-list" class="words-list"></ul>
+
+        <p class="hint">
+          👉 Click and drag in a straight line (up, down, sideways, or diagonally)
+          to highlight letters. Green = correct word, red = oops!
+        </p>
+      </aside>
+    </main>
+  </div>
+
+  <!-- Confetti library -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+
+  <!-- Your game logic -->
+  <script src="script.js"></script>
+</body>
+</html>
