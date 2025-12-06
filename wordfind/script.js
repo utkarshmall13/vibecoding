@@ -44,7 +44,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
   // Initial puzzle
-  generatePuzzle("animals");
+  generatePuzzle("animal");
 });
 
 /* -------------------- Confetti helpers -------------------- */
@@ -102,13 +102,14 @@ async function fetchWords(theme) {
 
   // 1) Try to get "examples of <theme>" (hyponyms)
   const urlHyponyms =
-    `${base}?rel_spc=${encodeURIComponent(theme)}&max=80`;
+    `${base}?rel_gen=${encodeURIComponent(theme)}&max=80&md=fp`;
 
   let data = [];
   try {
     const res = await fetch(urlHyponyms);
     if (res.ok) {
       data = await res.json();
+      console.log("Hyponym data:", data);
     }
   } catch (e) {
     console.error("Hyponym fetch failed", e);
@@ -372,6 +373,11 @@ function setupGridEvents() {
       endDrag();
     }
   });
+  gridEl.addEventListener("touchstart", onTouchStart, { passive: false });
+  gridEl.addEventListener("touchmove", onTouchMove, { passive: false });
+  document.addEventListener("touchend", onTouchEnd);
+  document.addEventListener("touchcancel", onTouchEnd);
+
 }
 
 function getCellFromEvent(e) {
@@ -381,6 +387,17 @@ function getCellFromEvent(e) {
   return target;
 }
 
+function getCellFromTouch(e) {
+  const touch = e.touches[0] || e.changedTouches[0];
+  if (!touch) return null;
+
+  const el = document.elementFromPoint(touch.clientX, touch.clientY);
+  if (!el || !el.classList || !el.classList.contains("cell")) {
+    return null;
+  }
+  return el;
+}
+
 function startDrag(cell) {
   isDragging = true;
   dragStartCell = cell;
@@ -388,6 +405,49 @@ function startDrag(cell) {
   currentSelection = [cell];
   cell.classList.add("selected-preview");
 }
+
+function onMouseDown(e) {
+  const cell = getCellFromEvent(e);
+  if (!cell) return;
+  e.preventDefault();
+  startDrag(cell);
+}
+
+function onMouseOver(e) {
+  if (!isDragging) return;
+  const cell = getCellFromEvent(e);
+  if (!cell) return;
+  e.preventDefault();
+  updateSelection(cell);
+}
+
+function onMouseUp(e) {
+  if (!isDragging) return;
+  e.preventDefault();
+  endDrag();
+}
+
+function onTouchStart(e) {
+  const cell = getCellFromTouch(e);
+  if (!cell) return;
+  e.preventDefault(); // stop page from scrolling / text selection
+  startDrag(cell);
+}
+
+function onTouchMove(e) {
+  if (!isDragging) return;
+  const cell = getCellFromTouch(e);
+  if (!cell) return;
+  e.preventDefault();
+  updateSelection(cell);
+}
+
+function onTouchEnd(e) {
+  if (!isDragging) return;
+  // no need to locate a cell here, just finish the drag
+  endDrag();
+}
+
 
 function updateSelection(cell) {
   if (!dragStartCell) return;
