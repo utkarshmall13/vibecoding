@@ -99,46 +99,46 @@ function fireConfettiBig() {
 
 async function fetchWords(theme) {
   const base = "https://api.datamuse.com/words";
-
-  // 1) Try to get "examples of <theme>" (hyponyms)
-  const urlHyponyms =
-    `${base}?rel_gen=${encodeURIComponent(theme)}&max=80&md=fp`;
+  // Always use the fallback query
+  const fallbackQuery = `an example of ${theme}`;
+  const urlFallback =
+    `${base}?ml=${encodeURIComponent(fallbackQuery)}&max=80&md=fp`;
 
   let data = [];
   try {
-    const res = await fetch(urlHyponyms);
+    const res = await fetch(urlFallback);
     if (res.ok) {
       data = await res.json();
-      console.log("Hyponym data:", data);
+      console.log("Fallback data:", data);
     }
   } catch (e) {
-    console.error("Hyponym fetch failed", e);
-  }
-
-  // 2) If we didn’t get enough, fall back to a softer "names of <theme>" query
-  if (!data || data.length < 8) {
-    const fallbackQuery = `types of ${theme}`;
-    const urlFallback =
-      `${base}?ml=${encodeURIComponent(fallbackQuery)}&max=80`;
-
-    try {
-      const res2 = await fetch(urlFallback);
-      if (res2.ok) {
-        const data2 = await res2.json();
-        // Prefer fallback if it's better
-        if (data2.length > data.length) {
-          data = data2;
-        }
-      }
-    } catch (e) {
-      console.error("Fallback fetch failed", e);
-    }
+    console.error("Fallback fetch failed", e);
   }
 
   // Filter: alphabetic only, reasonable length, no spaces, uppercase.
   // Optionally bias to nouns if tags are present.
   const words = [];
   const seen = new Set();
+
+  // Sort by decreasing frequency (highest first)
+  data = data.sort((a, b) => {
+    const fa = (a.tags && a.tags.find(t => t.startsWith("f:"))) ? parseFloat(a.tags.find(t => t.startsWith("f:")).slice(2)) : 0;
+    const fb = (b.tags && b.tags.find(t => t.startsWith("f:"))) ? parseFloat(b.tags.find(t => t.startsWith("f:")).slice(2)) : 0;
+    const va = a.score || 0;
+    const vb = b.score || 0;
+    const la = (a.word && a.word.length) ? a.word.length : 0;
+    const lb = (b.word && b.word.length) ? b.word.length : 0;
+
+    return fb*vb*lb - fa*va*la;
+  });
+
+  // Only include common nouns (tag "n"), exclude pronouns and similar (tag "pron")
+  data = data.filter(item =>
+    item.tags &&
+    item.tags.includes("n") &&
+    !item.tags.includes("pron")
+  );
+  console.log("Filtered noun-prioritized data:", data);
 
   for (const item of data) {
     const w = String(item.word).toUpperCase();
