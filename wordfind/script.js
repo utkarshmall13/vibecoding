@@ -99,26 +99,95 @@ function fireConfettiBig() {
 
 async function fetchWords(theme) {
   const base = "https://api.datamuse.com/words";
-  // Always use the fallback query
-  const fallbackQuery = `an example of ${theme}`;
-  const urlFallback =
-    `${base}?ml=${encodeURIComponent(fallbackQuery)}&max=80&md=fp`;
-
   let data = [];
+  // 0) Try a method to get hyponyms via wordnik api
+  // (Optional) You could add a Wordnik API call here for richr hyponym data.
+  // Example (requires API key):
+  const YOUR_API_KEY = "YOUR_WORDNIK"
+  const wordnikUrl = `https://api.wordnik.com/v4/word.json/${encodeURIComponent(theme)}/relatedWords?useCanonical=false&relationshipTypes=hyponym&limitPerRelationshipType=100&api_key=${YOUR_API_KEY}`;
   try {
-    const res = await fetch(urlFallback);
+    const res = await fetch(wordnikUrl);
     if (res.ok) {
-      data = await res.json();
-      console.log("Fallback data:", data);
+      const wordnikData = await res.json();
+      // Parse and add to data if needed
+      if (Array.isArray(wordnikData)) {
+        for (const rel of wordnikData) {
+          if (rel.relationshipType === "hyponym" && Array.isArray(rel.words)) {
+            for (const w of rel.words) {
+              // Wordnik words are plain strings, add as objects for consistency
+              data.push({ word: w, tags: ["n"], score: 0 });
+            }
+          }
+        }
+      }
     }
+    console.log("Wordnik hyponym data:", data);
   } catch (e) {
-    console.error("Fallback fetch failed", e);
+    console.error("Wordnik fetch failed", e);
   }
 
-  // Filter: alphabetic only, reasonable length, no spaces, uppercase.
-  // Optionally bias to nouns if tags are present.
-  const words = [];
-  const seen = new Set();
+  // 1) Try to get "examples of <theme>" (hyponyms)
+  const urlHyponyms =
+    `${base}?rel_gen=${encodeURIComponent(theme)}&max=80&md=fp`;
+
+  try {
+    const res = await fetch(urlHyponyms);
+    if (res.ok) {
+      data = await res.json();
+      console.log("Hyponym data:", data);
+    }
+  } catch (e) {
+    console.error("Hyponym fetch failed", e);
+  }
+
+  // 1.5 Use rel_spc
+  if (!data || data.length < 8) {
+    const urlRelSpc =
+      `${base}?rel_spc=${encodeURIComponent(theme)}&max=80&md=fp`;
+      
+    try {
+      const res = await fetch(urlRelSpc);
+      if (res.ok) {
+        const data2 = await res.json();
+        console.log("rel_spc data:", data2);
+        // concat data and data2, avoiding duplicates
+        const seenWords = new Set(data.map(item => item.word));
+        for (const item of data2) {
+          if (!seenWords.has(item.word)) {
+            data.push(item);
+          }
+        }
+      }
+    }
+    catch (e) {
+      console.error("rel_spc fetch failed", e);
+    }
+  }
+
+
+  // 2) If we didn’t get enough, fall back to a softer "names of <theme>" query
+  if (!data || data.length < 8) {
+    const fallbackQuery = `a type of ${theme}`;
+    const urlFallback =
+      `${base}?ml=${encodeURIComponent(fallbackQuery)}&max=80&md=fp`;
+
+    try {
+      const res2 = await fetch(urlFallback);
+      if (res2.ok) {
+        const data2 = await res2.json();
+        console.log("Fallback data:", data2);
+        // concat data and data2, avoiding duplicates
+        const seenWords = new Set(data.map(item => item.word));
+        for (const item of data2) {
+          if (!seenWords.has(item.word)) {
+            data.push(item);
+          }
+        }
+      }
+    } catch (e) {
+      console.error("Fallback fetch failed", e);
+    }
+  }
 
   // Sort by decreasing frequency (highest first)
   data = data.sort((a, b) => {
@@ -129,16 +198,24 @@ async function fetchWords(theme) {
     const la = (a.word && a.word.length) ? a.word.length : 0;
     const lb = (b.word && b.word.length) ? b.word.length : 0;
 
-    return fb*vb*lb - fa*va*la;
+    return fb*lb - fa*la;
+    // return vb-va;
   });
 
   // Only include common nouns (tag "n"), exclude pronouns and similar (tag "pron")
   data = data.filter(item =>
     item.tags &&
     item.tags.includes("n") &&
-    !item.tags.includes("pron")
+    !item.tags.includes("pron")&&
+    !item.tags.includes("adj")
   );
   console.log("Filtered noun-prioritized data:", data);
+
+
+  // Filter: alphabetic only, reasonable length, no spaces, uppercase.
+  // Optionally bias to nouns if tags are present.
+  const words = [];
+  const seen = new Set();
 
   for (const item of data) {
     const w = String(item.word).toUpperCase();
